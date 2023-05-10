@@ -2,9 +2,9 @@
 #define OSCFG_H
 
 #define MLQ_SCHED 1
-#define MAX_PRIO 140
+#define MAX_PRIO 3
 
-#define MM_PAGING 
+//#define MM_PAGING// predefined
 #define MM_FIXED_MEMSZ 0
 //#define VMDBG 1
 //#define MMDBG 1

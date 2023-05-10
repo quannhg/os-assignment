@@ -27,25 +27,15 @@ struct pcb_t *dequeue(struct queue_t *q)
         if (q == NULL || q->size == 0)
                 return NULL; // check for empty queue
 
-        struct pcb_t *highest_prio_proc = q->proc[0]; // assume first process has highest priority
-        int highest_prio_index = 0;
+        struct pcb_t *first_proc = q->proc[0]; // assume first process has highest priority
 
-        for (int i = 1; i < q->size; i++)
-        {
-                if (q->proc[i]->priority > highest_prio_proc->priority)
-                {
-                        highest_prio_proc = q->proc[i];
-                        highest_prio_index = i;
-                }
-        }
-
-        // remove highest priority process from queue
-        for (int i = highest_prio_index; i < q->size - 1; i++)
+        // remove first process from queue
+        for (int i = 0; i < q->size - 1; i++)
         {
                 q->proc[i] = q->proc[i + 1];
         }
 
         q->size--; // decrement queue size
 
-        return highest_prio_proc;
+        return first_proc;
 }

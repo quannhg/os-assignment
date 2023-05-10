@@ -13,45 +13,69 @@ static pthread_mutex_t queue_lock;
 static struct queue_t mlq_ready_queue[MAX_PRIO];
 #endif
 
-int queue_empty(void) {
+int queue_empty(void)
+{
 #ifdef MLQ_SCHED
 	unsigned long prio;
 	for (prio = 0; prio < MAX_PRIO; prio++)
-		if(!empty(&mlq_ready_queue[prio])) 
+		if (!empty(&mlq_ready_queue[prio]))
 			return -1;
 #endif
 	return (empty(&ready_queue) && empty(&run_queue));
 }
 
-void init_scheduler(void) {
+void init_scheduler(void)
+{
 #ifdef MLQ_SCHED
-    int i ;
+	int i;
 
-	for (i = 0; i < MAX_PRIO; i ++)
+	for (i = 0; i < MAX_PRIO; i++)
+	{
 		mlq_ready_queue[i].size = 0;
+		// init number of cpu each queue can use maximally
+		mlq_ready_queue[i].slot_cpu_can_use = MAX_PRIO - i;
+	}
+
 #endif
 	ready_queue.size = 0;
 	run_queue.size = 0;
+	run_queue.slot_cpu_can_use = MAX_PRIO;
 	pthread_mutex_init(&queue_lock, NULL);
 }
 
 #ifdef MLQ_SCHED
-/* 
+/*
  *  Stateful design for routine calling
  *  based on the priority and our MLQ policy
  *  We implement stateful here using transition technique
  *  State representation   prio = 0 .. MAX_PRIO, curr_slot = 0..(MAX_PRIO - prio)
  */
+
+// void incrNumberOfCpuCanUse(struct queue_t *q)
+// {
+// 	q->slot_cpu_can_use++;
+// }
+
+// void decrNumberOfCpuCanUse(struct queue_t *q)
+// {
+// 	q->slot_cpu_can_use--;
+// }
+
 struct pcb_t *get_mlq_proc(void)
 {
 	struct pcb_t *proc = NULL;
 	unsigned long curr_prio = 0, max_prio = MAX_PRIO;
 	while (curr_prio < max_prio)
 	{
-		if (!empty(&mlq_ready_queue[curr_prio]))
+		if (!empty(&mlq_ready_queue[curr_prio]) && mlq_ready_queue[curr_prio].slot_cpu_can_use > 0)
 		{
 			pthread_mutex_lock(&queue_lock);
 			proc = dequeue(&mlq_ready_queue[curr_prio]);
+			if (proc != NULL)
+			{
+				// decrNumberOfCpuCanUse(&mlq_ready_queue[curr_prio]); // decrease slot_cpu_can_use
+				mlq_ready_queue[curr_prio].slot_cpu_can_use--;
+			}
 			pthread_mutex_unlock(&queue_lock);
 			break;
 		}
@@ -63,32 +87,48 @@ struct pcb_t *get_mlq_proc(void)
 	return proc;
 }
 
-void put_mlq_proc(struct pcb_t * proc) {
+void put_mlq_proc(struct pcb_t *proc)
+{
+	pthread_mutex_lock(&queue_lock);
+	enqueue(&mlq_ready_queue[proc->prio], proc);
+	// decrNumberOfCpuCanUse(&mlq_ready_queue[proc->prio]); // increase slot_cpu_can_use
+	mlq_ready_queue[proc->prio].slot_cpu_can_use++;
+	pthread_mutex_unlock(&queue_lock);
+}
+
+void add_mlq_proc(struct pcb_t *proc)
+{
 	pthread_mutex_lock(&queue_lock);
 	enqueue(&mlq_ready_queue[proc->prio], proc);
 	pthread_mutex_unlock(&queue_lock);
 }
 
-void add_mlq_proc(struct pcb_t * proc) {
-	pthread_mutex_lock(&queue_lock);
-	enqueue(&mlq_ready_queue[proc->prio], proc);
-	pthread_mutex_unlock(&queue_lock);	
-}
-
-struct pcb_t * get_proc(void) {
+struct pcb_t *get_proc(int decrSlotCpu)
+{
 	return get_mlq_proc();
 }
 
-void put_proc(struct pcb_t * proc) {
+void put_proc(struct pcb_t *proc)
+{
 	return put_mlq_proc(proc);
 }
 
-void add_proc(struct pcb_t * proc) {
+void add_proc(struct pcb_t *proc)
+{
 	return add_mlq_proc(proc);
 }
+
+void finish_proc(struct pcb_t **proc)
+{
+	pthread_mutex_lock(&queue_lock);
+	mlq_ready_queue[(*proc)->prio].slot_cpu_can_use++;
+	pthread_mutex_unlock(&queue_lock);
+	free(*proc);
+}
 #else
-struct pcb_t * get_proc(void) {
-	struct pcb_t * proc = NULL;
+struct pcb_t *get_proc(void)
+{
+	struct pcb_t *proc = NULL;
 	/*TODO: get a process from [ready_queue].
 	 * Remember to use lock to protect the queue.
 	 * */
@@ -101,17 +141,22 @@ struct pcb_t * get_proc(void) {
 	return proc;
 }
 
-void put_proc(struct pcb_t * proc) {
+void put_proc(struct pcb_t *proc)
+{
 	pthread_mutex_lock(&queue_lock);
 	enqueue(&run_queue, proc);
 	pthread_mutex_unlock(&queue_lock);
 }
 
-void add_proc(struct pcb_t * proc) {
+void add_proc(struct pcb_t *proc)
+{
 	pthread_mutex_lock(&queue_lock);
 	enqueue(&ready_queue, proc);
-	pthread_mutex_unlock(&queue_lock);	
+	pthread_mutex_unlock(&queue_lock);
+}
+
+void finish_proc(struct pcb_t **proc)
+{
+	free(*proc);
 }
 #endif
-
-

@@ -62,7 +62,7 @@ static void * cpu_routine(void * args) {
 			/* The porcess has finish it job */
 			printf("\tCPU %d: Processed %2d has finished\n",
 				id ,proc->pid);
-			free(proc);
+			finish_proc(&proc);
 			proc = get_proc();
 			time_left = 0;
 		}else if (time_left == 0) {
@@ -126,7 +126,8 @@ static void * ld_routine(void * args) {
 #endif
 		printf("\tLoaded a process at %s, PID: %d PRIO: %ld\n",
 			ld_processes.path[i], proc->pid, ld_processes.prio[i]);
-		add_proc(proc);
+		add_proc(proc);// error when encrea cpu when not use
+
 		free(ld_processes.path[i]);
 		i++;
 		next_slot(timer_id);
