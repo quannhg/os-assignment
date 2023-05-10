@@ -51,16 +51,6 @@ void init_scheduler(void)
  *  State representation   prio = 0 .. MAX_PRIO, curr_slot = 0..(MAX_PRIO - prio)
  */
 
-// void incrNumberOfCpuCanUse(struct queue_t *q)
-// {
-// 	q->slot_cpu_can_use++;
-// }
-
-// void decrNumberOfCpuCanUse(struct queue_t *q)
-// {
-// 	q->slot_cpu_can_use--;
-// }
-
 struct pcb_t *get_mlq_proc(void)
 {
 	struct pcb_t *proc = NULL;
@@ -73,8 +63,7 @@ struct pcb_t *get_mlq_proc(void)
 			proc = dequeue(&mlq_ready_queue[curr_prio]);
 			if (proc != NULL)
 			{
-				// decrNumberOfCpuCanUse(&mlq_ready_queue[curr_prio]); // decrease slot_cpu_can_use
-				mlq_ready_queue[curr_prio].slot_cpu_can_use--;
+				mlq_ready_queue[curr_prio].slot_cpu_can_use--;	//decrease slot_cpu_can_use
 			}
 			pthread_mutex_unlock(&queue_lock);
 			break;
@@ -91,8 +80,7 @@ void put_mlq_proc(struct pcb_t *proc)
 {
 	pthread_mutex_lock(&queue_lock);
 	enqueue(&mlq_ready_queue[proc->prio], proc);
-	// decrNumberOfCpuCanUse(&mlq_ready_queue[proc->prio]); // increase slot_cpu_can_use
-	mlq_ready_queue[proc->prio].slot_cpu_can_use++;
+	mlq_ready_queue[proc->prio].slot_cpu_can_use++;	//increase slot_cpu_can_use
 	pthread_mutex_unlock(&queue_lock);
 }
 
