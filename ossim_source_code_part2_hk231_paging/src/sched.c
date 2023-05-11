@@ -109,7 +109,7 @@ void add_proc(struct pcb_t *proc)
 void finish_proc(struct pcb_t **proc)
 {
 	pthread_mutex_lock(&queue_lock);
-	mlq_ready_queue[(*proc)->prio].slot_cpu_can_use++;
+	mlq_ready_queue[(*proc)->prio].slot_cpu_can_use++;	//increase slot_cpu_can_use
 	pthread_mutex_unlock(&queue_lock);
 	free(*proc);
 }
