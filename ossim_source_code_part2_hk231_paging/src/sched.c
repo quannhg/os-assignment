@@ -59,13 +59,13 @@ struct pcb_t *get_mlq_proc(void)
 	{
 		if (!empty(&mlq_ready_queue[curr_prio]) && mlq_ready_queue[curr_prio].slot_cpu_can_use > 0)
 		{
-			pthread_mutex_lock(&queue_lock);
+			
 			proc = dequeue(&mlq_ready_queue[curr_prio]);
 			if (proc != NULL)
 			{
 				mlq_ready_queue[curr_prio].slot_cpu_can_use--;	//decrease slot_cpu_can_use
 			}
-			pthread_mutex_unlock(&queue_lock);
+			
 			break;
 		}
 		else
@@ -78,17 +78,17 @@ struct pcb_t *get_mlq_proc(void)
 
 void put_mlq_proc(struct pcb_t *proc)
 {
-	pthread_mutex_lock(&queue_lock);
+	
 	enqueue(&mlq_ready_queue[proc->prio], proc);
 	mlq_ready_queue[proc->prio].slot_cpu_can_use++;	//increase slot_cpu_can_use
-	pthread_mutex_unlock(&queue_lock);
+	
 }
 
 void add_mlq_proc(struct pcb_t *proc)
 {
-	pthread_mutex_lock(&queue_lock);
+	
 	enqueue(&mlq_ready_queue[proc->prio], proc);
-	pthread_mutex_unlock(&queue_lock);
+	
 }
 
 struct pcb_t *get_proc(int decrSlotCpu)
@@ -108,9 +108,9 @@ void add_proc(struct pcb_t *proc)
 
 void finish_proc(struct pcb_t **proc)
 {
-	pthread_mutex_lock(&queue_lock);
+	
 	mlq_ready_queue[(*proc)->prio].slot_cpu_can_use++;	//increase slot_cpu_can_use
-	pthread_mutex_unlock(&queue_lock);
+	
 	free(*proc);
 }
 #else
@@ -122,25 +122,25 @@ struct pcb_t *get_proc(void)
 	 * */
 	if (!empty(&ready_queue))
 	{
-		pthread_mutex_lock(&queue_lock);
+		
 		proc = dequeue(&ready_queue);
-		pthread_mutex_unlock(&queue_lock);
+		
 	}
 	return proc;
 }
 
 void put_proc(struct pcb_t *proc)
 {
-	pthread_mutex_lock(&queue_lock);
+	
 	enqueue(&run_queue, proc);
-	pthread_mutex_unlock(&queue_lock);
+	
 }
 
 void add_proc(struct pcb_t *proc)
 {
-	pthread_mutex_lock(&queue_lock);
+	
 	enqueue(&ready_queue, proc);
-	pthread_mutex_unlock(&queue_lock);
+	
 }
 
 void finish_proc(struct pcb_t **proc)

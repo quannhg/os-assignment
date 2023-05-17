@@ -5,7 +5,7 @@
 #define MAX_PRIO 3
 
 //#define MM_PAGING// predefined
-#define MM_FIXED_MEMSZ 0
+//define MM_FIXED_MEMSZ
 //#define VMDBG 1
 //#define MMDBG 1
 #define IODUMP 1
