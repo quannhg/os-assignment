@@ -227,10 +227,12 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     /* TODO: Play with your paging theory here */
     /* Find victim page */
-    find_victim_page(caller->mm, &vicpgn);
+    if(find_victim_page(caller->mm, &vicpgn)==-1)
+      return -1;
 
     /* Get free frame in MEMSWP */
-    MEMPHY_get_freefp(caller->active_mswp, &swpfpn);
+    if(MEMPHY_get_freefp(caller->active_mswp, &swpfpn)==-1)
+      return -1;
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
@@ -377,7 +379,9 @@ int pgwrite(
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
 #endif
+#ifdef MEMPHYS_DUMP
   MEMPHY_dump(proc->mram);
+#endif
 #endif
 
   return __write(proc, 0, destination, offset, data);
@@ -575,6 +579,7 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
     { /* Current region has enough space */
       newrg->rg_start = rgit->rg_start;
       newrg->rg_end = rgit->rg_start + size;
+      newrg->rg_next = NULL;
 
       /* Update left space in chosen region */
       if (rgit->rg_start + size < rgit->rg_end)
