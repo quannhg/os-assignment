@@ -8,6 +8,10 @@
 #include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
+
+// synchronized for vm
+static pthread_mutex_t vm_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /*enlist_vm_freerg_list - add new rg to freerg_list
  *@mm: memory region
@@ -81,6 +85,12 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 {
   /*Allocate at the toproof */
   struct vm_rg_struct rgnode;
+  print_list_rg(caller->mm->symrgtbl + rgid);
+
+  if (size <= 0)
+    return -1;
+
+  pthread_mutex_lock(&vm_lock);
 
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
@@ -89,6 +99,9 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
     *alloc_addr = rgnode.rg_start;
 
+    print_list_rg(caller->mm->symrgtbl + rgid);
+
+    pthread_mutex_unlock(&vm_lock);
     return 0;
   }
 
@@ -113,6 +126,9 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   *alloc_addr = old_sbrk;
 
+  print_list_rg(caller->mm->symrgtbl + rgid);
+
+  pthread_mutex_unlock(&vm_lock);
   return 0;
 }
 
@@ -127,14 +143,24 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 {
   struct vm_rg_struct rgnode;
 
-  if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
-    return -1;
+  pthread_mutex_lock(&vm_lock);
 
+  if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
+  {
+    pthread_mutex_unlock(&vm_lock);
+    return -1;
+  }
   /* TODO: Manage the collect freed region to freerg_list */
 
   // Get the free region
   struct vm_rg_struct *free_rg = get_symrg_byid(caller->mm, rgid);
 
+  if (free_rg->rg_start == free_rg->rg_end)
+  {
+    pthread_mutex_unlock(&vm_lock);
+    return -1;
+  }
+  
   // Assign the rgnode with appropriate values
   rgnode.rg_start = free_rg->rg_start;
   rgnode.rg_end = free_rg->rg_end;
@@ -142,6 +168,8 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
+
+  pthread_mutex_unlock(&vm_lock);
 
   return 0;
 }
@@ -407,19 +435,24 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, in
 int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, int vmastart, int vmaend)
 {
   struct vm_area_struct *vma = caller->mm->mmap;
+  struct vm_area_struct *check_vma = get_vma_by_num(caller->mm, vmaid);
 
   /* TODO validate the planned memory area is not overlapped */
+
+  if (vmastart > vmaend)
+    return -1;
 
   while (vma != NULL)
   {
     // Check for overlap conditions
-    if ((vma->vm_start <= vmastart && vmastart < vma->vm_end) || // Start address overlap
-        (vma->vm_start < vmaend && vmaend <= vma->vm_end) ||     // End address overlap
-        (vmastart <= vma->vm_start && vma->vm_end <= vmaend))
-    { // Encompassing overlap
-      // Overlap detected, return -1 to indicate failure
-      return -1;
-    }
+    if (vma != check_vma)
+      if ((vma->vm_start <= vmastart && vmastart < vma->vm_end) || // Start address overlap
+          (vma->vm_start < vmaend && vmaend <= vma->vm_end) ||     // End address overlap
+          (vmastart <= vma->vm_start && vma->vm_end <= vmaend))
+      { // Encompassing overlap
+        // Overlap detected, return -1 to indicate failure
+        return -1;
+      }
 
     vma = vma->vm_next; // Move to the next memory region
   }
@@ -446,7 +479,10 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
 
   /*Validate overlap of obtained region */
   if (validate_overlap_vm_area(caller, vmaid, area->rg_start, area->rg_end) < 0)
+  {
+    fprintf(stderr, "error: overlap when allocated memory region");
     return -1; /*Overlap and failed allocation */
+  }
 
   /* The obtained vm area (only)
    * now will be alloc real ram region */
@@ -455,6 +491,11 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
   if (vm_map_ram(caller, area->rg_start, area->rg_end,
                  old_end, incnumpage, newrg) < 0)
     return -1; /* Map the memory to MEMRAM */
+
+  // assign new region to new memory of vm area
+  struct vm_rg_struct *new_rg = malloc(sizeof(struct vm_rg_struct));
+  new_rg->rg_start = old_end;
+  new_rg->rg_end = cur_vma->sbrk;
 
   return 0;
 }

@@ -102,7 +102,7 @@ int vmap_page_range(struct pcb_t *caller,           // process call
   for (pgit = 0; pgit < pgnum; pgit++)
   {
     // Update the page table entry at the given address
-    caller->mm->pgd[pgn + pgit] = fpit->fpn; // Assuming fpn is the frame page number
+    pte_set_fpn(&caller->mm->pgd[pgn + pgit], fpit->fpn);
 
     // Update the region boundaries
     ret_rg->rg_end += PAGING_PAGESZ;
