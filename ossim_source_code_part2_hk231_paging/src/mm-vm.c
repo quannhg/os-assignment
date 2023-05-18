@@ -42,7 +42,7 @@ struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid)
   if (mm->mmap == NULL)
     return NULL;
 
-  int vmait = 0;
+  int vmait = pvma->vm_id;
 
   while (vmait < vmaid)
   {
@@ -50,6 +50,7 @@ struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid)
       return NULL;
 
     pvma = pvma->vm_next;
+    vmait = pvma->vm_id;
   }
 
   return pvma;
