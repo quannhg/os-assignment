@@ -85,7 +85,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 {
   /*Allocate at the toproof */
   struct vm_rg_struct rgnode;
-  //print_list_rg(caller->mm->symrgtbl + rgid);
+  // print_list_rg(caller->mm->symrgtbl + rgid);
 
   if (size <= 0)
   {
@@ -96,13 +96,13 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
-    
+
     caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
 
     *alloc_addr = rgnode.rg_start;
 
-    //print_list_rg(caller->mm->symrgtbl + rgid);
+    // print_list_rg(caller->mm->symrgtbl + rgid);
 
     pthread_mutex_unlock(&vm_lock);
     return 0;
@@ -129,7 +129,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   *alloc_addr = old_sbrk;
 
-  //print_list_rg(caller->mm->symrgtbl + rgid);
+  // print_list_rg(caller->mm->symrgtbl + rgid);
 
   pthread_mutex_unlock(&vm_lock);
   return 0;
@@ -144,10 +144,10 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
  */
 int __free(struct pcb_t *caller, int vmaid, int rgid)
 {
-  //printf("__free:\n");
-  //print_list_rg(caller->mm->mmap->vm_freerg_list);
-  struct vm_rg_struct * rgnode = malloc(sizeof(struct vm_rg_struct));
-  
+  // printf("__free:\n");
+  // print_list_rg(caller->mm->mmap->vm_freerg_list);
+  struct vm_rg_struct *rgnode = malloc(sizeof(struct vm_rg_struct));
+
   pthread_mutex_lock(&vm_lock);
 
   if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
@@ -173,11 +173,9 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
-  //print_list_rg(caller->mm->mmap->vm_freerg_list);
+  // print_list_rg(caller->mm->mmap->vm_freerg_list);
 
   pthread_mutex_unlock(&vm_lock);
-
-  
 
   return 0;
 }
@@ -220,32 +218,34 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
   if (!PAGING_PAGE_PRESENT(pte))
   { /* Page is not online, make it actively living */
     int vicpgn, swpfpn;
-    // int vicfpn;
-    // uint32_t vicpte;
+    int vicfpn;
+    uint32_t vicpte;
 
     int tgtfpn = PAGING_SWP(pte); // the target frame storing our variable
 
     /* TODO: Play with your paging theory here */
     /* Find victim page */
-    if(find_victim_page(caller->mm, &vicpgn)==-1)
+    if (find_victim_page(caller->mm, &vicpgn) == -1)
       return -1;
 
+    vicpte = mm->pgd[vicpgn];
+    vicfpn = PAGING_FPN(vicpte);
+
     /* Get free frame in MEMSWP */
-    if(MEMPHY_get_freefp(caller->active_mswp, &swpfpn)==-1)
+    if (MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == -1)
       return -1;
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
-    __swap_cp_page(caller->mram, vicpgn, caller->mswp[0], swpfpn);
+    __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
     /* Copy target frame from swap to mem */
-    __swap_cp_page(caller->mswp[0], tgtfpn, caller->mram, pgn);
+    __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn);
 
     /* Update page table */
-    pte_set_swap(&mm->pgd[pgn], 0, tgtfpn);
+    pte_set_swap(&vicpte, 0, swpfpn);
 
     /* Update its online status of the target page */
-    // pte_set_fpn() & mm->pgd[pgn];
-    pte_set_fpn(&pte, tgtfpn);
+    pte_set_fpn(&pte, vicfpn);
 
     enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
@@ -336,10 +336,11 @@ int pgread(
   destination = (uint32_t)data;
 #ifdef IODUMP
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
-#ifdef PAGETBL_DUMP
+
   print_pgtbl(proc, 0, -1); // print max TBL
-#endif
+#ifdef MEMPHY_DUMP
   MEMPHY_dump(proc->mram);
+#endif
 #endif
 
   return val;
@@ -355,15 +356,20 @@ int pgread(
  */
 int __write(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE value)
 {
+  pthread_mutex_lock(&vm_lock);
   struct vm_rg_struct *currg = get_symrg_byid(caller->mm, rgid);
 
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
   if (currg == NULL || cur_vma == NULL) /* Invalid memory identify */
+  {
+    pthread_mutex_unlock(&vm_lock);
     return -1;
+  }
 
   pg_setval(caller->mm, currg->rg_start + offset, value, caller);
 
+  pthread_mutex_unlock(&vm_lock);
   return 0;
 }
 
@@ -376,9 +382,7 @@ int pgwrite(
 {
 #ifdef IODUMP
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
-#ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
-#endif
 #ifdef MEMPHYS_DUMP
   MEMPHY_dump(proc->mram);
 #endif
