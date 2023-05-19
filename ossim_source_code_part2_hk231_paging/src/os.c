@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <os-cfg.h>
 
 static int time_slot;
 static int num_cpus;
@@ -151,7 +152,7 @@ static void read_config(const char * path) {
 		malloc(sizeof(unsigned long) * num_processes);
 #ifdef MM_PAGING
 	int sit;
-#ifdef MM_FIXED_MEMSZ
+#ifdef MM_FIXED_MEMSZ 
 	/* We provide here a back compatible with legacy OS simulatiom config file
          * In which, it have no addition config line for Mema, keep only one line
 	 * for legacy info 
@@ -168,8 +169,9 @@ static void read_config(const char * path) {
 	*/
 	fscanf(file, "%d\n", &memramsz);
 	for(sit = 0; sit < PAGING_MAX_MMSWP; sit++)
-		fscanf(file, "%d", &(memswpsz[sit])); 
-
+	{
+		fscanf(file, "%d", &(memswpsz[sit]));
+	}
        fscanf(file, "\n"); /* Final character */
 #endif
 #endif
