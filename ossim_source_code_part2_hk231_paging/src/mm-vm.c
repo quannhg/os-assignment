@@ -156,6 +156,12 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   // Get the free region
   struct vm_rg_struct *free_rg = get_symrg_byid(caller->mm, rgid);
 
+  if (free_rg->is_allocated != 1)
+  {
+    printf("Unable to delocated memory region %d\n", rgid);
+    return -1;
+  }
+
   if (free_rg->rg_start == free_rg->rg_end)
   {
     return -1;
