@@ -20,6 +20,7 @@ struct pgn_t{
 struct vm_rg_struct {
    unsigned long rg_start;
    unsigned long rg_end;
+   int is_allocated;
 
    struct vm_rg_struct *rg_next;
 };
