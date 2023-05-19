@@ -85,7 +85,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 {
   /*Allocate at the toproof */
   struct vm_rg_struct rgnode;
-  // print_list_rg(caller->mm->symrgtbl + rgid);
 
   size = PAGING_PAGE_ALIGNSZ(size);
 
@@ -105,8 +104,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
     *alloc_addr = rgnode.rg_start;
 
-    // print_list_rg(caller->mm->symrgtbl + rgid);
-
     pthread_mutex_unlock(&vm_lock);
     return 0;
   }
@@ -115,13 +112,11 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   /*Attempt to increate limit to get space */
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-  // int inc_limit_ret
   int old_sbrk;
 
   old_sbrk = cur_vma->sbrk;
 
   /* TODO INCREASE THE LIMIT
-   * inc_vma_limit(caller, vmaid, inc_sz)
    */
   inc_vma_limit(caller, vmaid, size);
 
@@ -132,7 +127,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   *alloc_addr = old_sbrk;
 
-  // print_list_rg(caller->mm->symrgtbl + rgid);
 
   pthread_mutex_unlock(&vm_lock);
   return 0;
@@ -180,7 +174,6 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
-  // print_list_rg(caller->mm->mmap->vm_freerg_list);
 
   pthread_mutex_unlock(&vm_lock);
 
