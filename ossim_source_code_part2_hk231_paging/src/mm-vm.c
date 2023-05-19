@@ -144,27 +144,24 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
  */
 int __free(struct pcb_t *caller, int vmaid, int rgid)
 {
-  // printf("__free:\n");
-  // print_list_rg(caller->mm->mmap->vm_freerg_list);
-  struct vm_rg_struct *rgnode = malloc(sizeof(struct vm_rg_struct));
-
-  pthread_mutex_lock(&vm_lock);
-
   if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
   {
-    pthread_mutex_unlock(&vm_lock);
     return -1;
   }
   /* TODO: Manage the collect freed region to freerg_list */
 
+  
   // Get the free region
   struct vm_rg_struct *free_rg = get_symrg_byid(caller->mm, rgid);
 
   if (free_rg->rg_start == free_rg->rg_end)
   {
-    pthread_mutex_unlock(&vm_lock);
     return -1;
   }
+
+  pthread_mutex_lock(&vm_lock);
+
+  struct vm_rg_struct *rgnode = malloc(sizeof(struct vm_rg_struct));
 
   // Assign the rgnode with appropriate values
   rgnode->rg_start = free_rg->rg_start;
@@ -316,9 +313,15 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE *data)
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
   if (currg == NULL || cur_vma == NULL) /* Invalid memory identify */
+  {
     return -1;
+  }
+
+  pthread_mutex_lock(&vm_lock);
 
   pg_getval(caller->mm, currg->rg_start + offset, data, caller);
+
+  pthread_mutex_unlock(&vm_lock);
 
   return 0;
 }
@@ -356,16 +359,17 @@ int pgread(
  */
 int __write(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE value)
 {
-  pthread_mutex_lock(&vm_lock);
+  
   struct vm_rg_struct *currg = get_symrg_byid(caller->mm, rgid);
 
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
   if (currg == NULL || cur_vma == NULL) /* Invalid memory identify */
   {
-    pthread_mutex_unlock(&vm_lock);
     return -1;
   }
+
+  pthread_mutex_lock(&vm_lock);
 
   pg_setval(caller->mm, currg->rg_start + offset, value, caller);
 
@@ -611,6 +615,7 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
           rgit->rg_next = NULL;
         }
       }
+      break;
     }
     else
     {
