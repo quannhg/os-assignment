@@ -10,7 +10,7 @@
             "name": "Debug",
             "program": "${workspaceFolder}/os",
             "args": [
-                "os_0_mlq_paging"
+                "os_1_mlq_paging_small_1K"
             ],
             "cwd": "${workspaceFolder}"
         }

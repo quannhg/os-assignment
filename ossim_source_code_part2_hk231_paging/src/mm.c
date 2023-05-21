@@ -101,19 +101,22 @@ int vmap_page_range(struct pcb_t *caller,           // process call
 
   for (pgit = 0; pgit < pgnum; pgit++)
   {
-    // Update the page table entry at the given address
+    printf("%d\n", fpit->fpn);
+    // Update the page table entry at the given addressS
     pte_set_fpn(&caller->mm->pgd[pgn + pgit], fpit->fpn);
+
+    printf("%d\n", PAGING_FPN(caller->mm->pgd[pgn + pgit]));
 
     // Update the region boundaries
     ret_rg->rg_end += PAGING_PAGESZ;
 
     // Move to the next frame in the list
     fpit = fpit->fp_next;
-  }
 
-  /* Tracking for later page replacement activities (if needed)
-   * Enqueue new usage page */
-  enlist_pgn_node(&caller->mm->fifo_pgn, pgn + pgit);
+    /* Tracking for later page replacement activities (if needed)
+     * Enqueue new usage page */
+    enlist_pgn_node(&caller->mm->fifo_pgn, pgn + pgit);
+  }
 
   return 0;
 }
@@ -132,29 +135,41 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
 
   for (pgit = 0; pgit < req_pgnum; pgit++)
   {
+    newfp_str = (struct framephy_struct *)malloc(sizeof(struct framephy_struct));
     if (MEMPHY_get_freefp(caller->mram, &fpn) == 0)
     {
-      // Allocate a new frame structure
-      struct framephy_struct *newfp = malloc(sizeof(struct framephy_struct));
-      newfp->fpn = fpn;
-      newfp->fp_next = NULL;
-      newfp->owner = caller->mm;
-
-      if (newfp_str == NULL)
-      {
-        newfp_str = newfp;
-        *frm_lst = newfp_str;
-      }
-      else
-      {
-        newfp_str->fp_next = newfp;
-        newfp_str = newfp;
-      }
+      newfp_str->fpn = fpn;
     }
     else
     { // ERROR CODE of obtaining somes but not enough frames
-      return -1;
+      int vicpgn, swpfpn;
+      if (find_victim_page(caller->mm, &vicpgn) == -1 || MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == -1)
+      {
+        if (*frm_lst == NULL)
+        {
+          return -1;
+        }
+        else
+        {
+          struct framephy_struct *freefp_str;
+          while (*frm_lst != NULL)
+          {
+            freefp_str = *frm_lst;
+            *frm_lst = (*frm_lst)->fp_next;
+            free(freefp_str);
+          }
+          return -3000;
+        }
+      }
+      uint32_t vicpte = caller->mm->pgd[vicpgn];
+      int vicfpn = PAGING_FPN(vicpte);
+      __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
+      pte_set_swap(&caller->mm->pgd[vicpgn], 0, swpfpn);
+      newfp_str->fpn = vicfpn;
+      newfp_str->owner = caller->mm;
     }
+    newfp_str->fp_next = *frm_lst;
+    *frm_lst = newfp_str;
   }
 
   return 0;
@@ -386,6 +401,11 @@ int print_pgtbl(struct pcb_t *caller, uint32_t start, uint32_t end)
   for (pgit = pgn_start; pgit < pgn_end; pgit++)
   {
     printf("%08ld: %08x\n", pgit * sizeof(uint32_t), caller->mm->pgd[pgit]);
+  }
+
+  for (pgit = pgn_start; pgit < pgn_end; pgit++)
+  {
+    printf("Page Number: %d -> Frame Number: %d\n", pgit, PAGING_FPN(caller->mm->pgd[pgit]));
   }
 
   return 0;
