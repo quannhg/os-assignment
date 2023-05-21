@@ -127,7 +127,6 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   *alloc_addr = old_sbrk;
 
-
   pthread_mutex_unlock(&vm_lock);
   return 0;
 }
@@ -225,10 +224,13 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     /* TODO: Play with your paging theory here */
     /* Find victim page */
-    if (find_victim_page(caller->mm, &vicpgn) == -1)
+    struct framephy_struct *victim_fp = (struct framephy_struct *)malloc(sizeof(struct framephy_struct));
+    if (find_victim_page(caller, &victim_fp) == -1)
       return -1;
 
-    vicpte = mm->pgd[vicpgn];
+    vicpgn = victim_fp->pte_id;
+
+    vicpte = victim_fp->owner->pgd[vicpgn];
     vicfpn = PAGING_FPN(vicpte);
 
     /* Get free frame in MEMSWP */
@@ -237,7 +239,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
-    __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
+    __swap_cp_page(victim_fp->p_owner->mram, vicfpn, caller->active_mswp, swpfpn);
     /* Copy target frame from swap to mem */
     __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn);
 
@@ -247,7 +249,11 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     /* Update its online status of the target page */
     pte_set_fpn(&pte, vicfpn);
 
+    *fpn = PAGING_FPN(pte);
+
     enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
+
+    enlist_fpn_node(&caller->mram->used_fp_list, *fpn, caller->mm, pgn, caller);
   }
 
   *fpn = PAGING_FPN(pte);
@@ -317,7 +323,7 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE *data)
   if (!currg->is_allocated)
   {
     printf("read region=%d offset=%d\n", rgid, offset);
-    printf("Access violation reading location: memory region %d\n", rgid);
+    printf("access violation reading location: memory region %d\n", rgid);
     return -1;
   }
 
@@ -345,16 +351,17 @@ int pgread(
     uint32_t destination)
 {
   BYTE data;
+
   int val = __read(proc, 0, source, offset, &data);
 
-  if(val == -1) return -1;
+  if (val == -1)
+    return -1;
 
   destination = (uint32_t)data;
 #ifdef IODUMP
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
-
   print_pgtbl(proc, 0, -1); // print max TBL
-#ifdef MEMPHY_DUMP
+#ifdef MEMPHYS_DUMP
   MEMPHY_dump(proc->mram);
 #endif
 #endif
@@ -377,7 +384,7 @@ int __write(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE value)
 
   if (!currg->is_allocated)
   {
-    printf("Access violation writing location: memory region %d\n", rgid);
+    printf("access violation writing location: memory region %d\n", rgid);
     return -1;
   }
 
@@ -405,23 +412,23 @@ int pgwrite(
 {
 #ifdef IODUMP
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
-#ifdef MEMPHYS_DUMP
-  MEMPHY_dump(proc->mram);
-#endif
 #endif
   uint32_t max_offset = proc->mm->symrgtbl[destination].rg_end - proc->mm->symrgtbl[destination].rg_start - 1;
 
   if (offset > max_offset)
   {
-    printf("Access violation writing location: memory region %d\n", destination);
+    printf("access violation writing location: memory region %d\n", destination);
     return -1;
   }
 
   int status = __write(proc, 0, destination, offset, data);
-  if(status != -1)
+  if (status != -1)
   {
     print_pgtbl(proc, 0, -1); // print max TBL
   }
+#ifdef MEMPHYS_DUMP
+  MEMPHY_dump(proc->mram);
+#endif
 
   return status;
 }
@@ -556,39 +563,38 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
  *@pgn: return page number
  *
  */
-int find_victim_page(struct mm_struct *mm, int *retpgn)
+int find_victim_page(struct pcb_t *caller, struct framephy_struct **re_fp)
 {
-  struct pgn_t *pg = mm->fifo_pgn;
-  struct pgn_t *prev = NULL;
+  struct framephy_struct *fp_q = caller->mram->used_fp_list;
+  struct framephy_struct *prev = NULL;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
 
-  if (pg == NULL)
+  if (fp_q == NULL)
   {
     // The FIFO queue is empty, which should not happen
     return -1;
   }
 
   // Traverse to the end of the FIFO queue to find the oldest page
-  while (pg->pg_next != NULL)
+  while (fp_q->fp_next != NULL)
   {
-    prev = pg;
-    pg = pg->pg_next;
+    prev = fp_q;
+    fp_q = fp_q->fp_next;
   }
 
   // Get the page number of the oldest page
-  *retpgn = pg->pgn;
+  *re_fp = fp_q;
 
   // Remove the oldest page from the FIFO queue
   if (prev != NULL)
   {
-    prev->pg_next = NULL;
+    prev->fp_next = NULL;
   }
   else
   {
-    mm->fifo_pgn = NULL;
+    caller->mram->used_fp_list = NULL;
   }
-  free(pg);
 
   return 0;
 }

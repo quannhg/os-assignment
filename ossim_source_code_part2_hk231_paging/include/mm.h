@@ -95,6 +95,7 @@
 struct vm_rg_struct * init_vm_rg(int rg_start, int rg_endi);
 int enlist_vm_rg_node(struct vm_rg_struct **rglist, struct vm_rg_struct* rgnode);
 int enlist_pgn_node(struct pgn_t **pgnlist, int pgn);
+int enlist_fpn_node(struct framephy_struct **flist, int fpn, struct mm_struct* owner, int pte_id, struct pcb_t *p_owner);
 int vmap_page_range(struct pcb_t *caller, int addr, int pgnum, 
                     struct framephy_struct *frames, struct vm_rg_struct *ret_rg);
 int vm_map_ram(struct pcb_t *caller, int astart, int send, int mapstart, int incpgnum, struct vm_rg_struct *ret_rg);
@@ -134,7 +135,7 @@ struct vm_rg_struct * get_symrg_byid(struct mm_struct* mm, int rgid);
 int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, int vmastart, int vmaend);
 int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_struct *newrg);
 int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz);
-int find_victim_page(struct mm_struct* mm, int *pgn);
+int find_victim_page(struct pcb_t *caller, struct framephy_struct **re_fp);
 struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid);
 
 /* MEM/PHY protypes */

@@ -66,7 +66,6 @@ int MEMPHY_read(struct memphy_struct *mp, int addr, BYTE *value)
    else /* Sequential access device */
       return MEMPHY_seq_read(mp, addr, value);
 
-   //printf("read MEMPHY[%d]: %d\n", addr, mp->storage[addr]);
    return 0;
 }
 
@@ -107,8 +106,6 @@ int MEMPHY_write(struct memphy_struct *mp, int addr, BYTE data)
       mp->storage[addr] = data;
    else /* Sequential access device */
       return MEMPHY_seq_write(mp, addr, data);
-   
-   //printf("write MEMPHY[%d]: %d\n", addr, mp->storage[addr]);
 
    return 0;
 }
@@ -177,16 +174,12 @@ int MEMPHY_dump(struct memphy_struct *mp)
       return -1;
    }
 
-   BYTE *ptr = mp->storage;
-   int i;
-
-   for (i = 0; i < mp->maxsz; i++)
+   for (int i = 0; i < mp->maxsz; ++i)
    {
-      printf("%02X ", *ptr);
-      ptr++;
-
-      if ((i + 1) % 16 == 0)
-         printf("\n");
+      if (mp->storage[i] != 0)
+      {
+         printf("BYTE %08x: %d\n", i, mp->storage[i]);
+      }
    }
 
    printf("\n");
