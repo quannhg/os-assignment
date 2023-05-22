@@ -55,7 +55,7 @@ int init_pte(uint32_t *pte,
  */
 int pte_set_swap(uint32_t *pte, int swptyp, int swpoff)
 {
-  SETBIT(*pte, PAGING_PTE_PRESENT_MASK);
+  CLRBIT(*pte, PAGING_PTE_PRESENT_MASK);
   SETBIT(*pte, PAGING_PTE_SWAPPED_MASK);
 
   SETVAL(*pte, swptyp, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
@@ -161,7 +161,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       uint32_t vicpte = victim_fp->owner->pgd[vicpgn];
       int vicfpn = PAGING_FPN(vicpte);
       __swap_cp_page(victim_fp->p_owner->mram, vicfpn, caller->active_mswp, swpfpn);
-      pte_set_swap(&vicpte, 0, swpfpn);
+      pte_set_swap(&victim_fp->owner->pgd[vicpgn], 0, swpfpn);
       newfp_str->fpn = vicfpn;
       newfp_str->owner = caller->mm;
     }

@@ -66,9 +66,9 @@ struct framephy_struct {
    struct framephy_struct *fp_next;
 
    /* Resereed for tracking allocated framed */
-   struct mm_struct* owner;
-   int pte_id;
-   struct pcb_t *p_owner;
+   struct mm_struct* owner; //memory management of owner process
+   int pte_id; // page number of vm_area
+   struct pcb_t *p_owner; //process that have vm area link to this physical page
 };
 
 struct memphy_struct {

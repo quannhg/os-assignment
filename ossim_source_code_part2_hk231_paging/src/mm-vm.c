@@ -168,6 +168,8 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   rgnode->rg_start = free_rg->rg_start;
   rgnode->rg_end = free_rg->rg_end;
   rgnode->rg_next = NULL;
+  rgnode->rg_start = 0;
+  rgnode->rg_end = 0;
 
   free_rg->is_allocated = 0;
 
@@ -244,7 +246,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn);
 
     /* Update page table */
-    pte_set_swap(&vicpte, 0, swpfpn);
+    pte_set_swap(&victim_fp->owner->pgd[vicpgn], 0, swpfpn);
 
     /* Update its online status of the target page */
     pte_set_fpn(&pte, vicfpn);
@@ -560,11 +562,16 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
 
 /*find_victim_page - find victim page
  *@caller: caller
- *@pgn: return page number
+ *@pgn: return physical page
  *
  */
 int find_victim_page(struct pcb_t *caller, struct framephy_struct **re_fp)
 {
+  if(caller->mm->mmap->vm_freerg_list)
+  {
+    
+  }
+
   struct framephy_struct *fp_q = caller->mram->used_fp_list;
   struct framephy_struct *prev = NULL;
 
