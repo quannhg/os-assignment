@@ -165,11 +165,11 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   struct vm_rg_struct *rgnode = malloc(sizeof(struct vm_rg_struct));
 
   // Assign the rgnode with appropriate values
-  rgnode->rg_start = free_rg->rg_start;
-  rgnode->rg_end = free_rg->rg_end;
+  rgnode->rg_start = *&(free_rg->rg_start);
+  rgnode->rg_end = *&(free_rg->rg_end);
   rgnode->rg_next = NULL;
-  rgnode->rg_start = 0;
-  rgnode->rg_end = 0;
+  free_rg->rg_start = 0;
+  free_rg->rg_end = 0;
 
   free_rg->is_allocated = 0;
 
@@ -248,8 +248,9 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     /* Update page table */
     pte_set_swap(&victim_fp->owner->pgd[vicpgn], 0, swpfpn);
 
+    // TODO: check pte_set_fpn
     /* Update its online status of the target page */
-    pte_set_fpn(&pte, vicfpn);
+    pte_set_fpn(&mm->pgd[pgn], vicfpn);
 
     *fpn = PAGING_FPN(pte);
 
@@ -324,8 +325,8 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE *data)
 
   if (!currg->is_allocated)
   {
-    printf("read region=%d offset=%d\n", rgid, offset);
-    printf("access violation reading location: memory region %d\n", rgid);
+    printf("process %d read region=%d offset=%d\n", caller->pid, rgid, offset);
+    printf("process %d access violation reading location: memory region %d\n", caller->pid, rgid);
     return -1;
   }
 
@@ -361,7 +362,7 @@ int pgread(
 
   destination = (uint32_t)data;
 #ifdef IODUMP
-  printf("read region=%d offset=%d value=%d\n", source, offset, data);
+  printf("process %d read region=%d offset=%d value=%d\n\n", proc->pid, source, offset, data);
   print_pgtbl(proc, 0, -1); // print max TBL
 #ifdef MEMPHYS_DUMP
   MEMPHY_dump(proc->mram);
@@ -413,13 +414,13 @@ int pgwrite(
     uint32_t offset)
 {
 #ifdef IODUMP
-  printf("write region=%d offset=%d value=%d\n", destination, offset, data);
+  printf("process %d write region=%d offset=%d value=%d\n\n", proc->pid, destination, offset, data);
 #endif
   uint32_t max_offset = proc->mm->symrgtbl[destination].rg_end - proc->mm->symrgtbl[destination].rg_start - 1;
 
   if (offset > max_offset)
   {
-    printf("access violation writing location: memory region %d\n", destination);
+    printf("process %d access violation writing location: memory region %d\n", proc->pid, destination);
     return -1;
   }
 
@@ -567,15 +568,48 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
  */
 int find_victim_page(struct pcb_t *caller, struct framephy_struct **re_fp)
 {
-  if(caller->mm->mmap->vm_freerg_list)
-  {
-    
-  }
-
   struct framephy_struct *fp_q = caller->mram->used_fp_list;
   struct framephy_struct *prev = NULL;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
+
+  // check if free region list have frame
+  if (caller->mm->mmap->vm_freerg_list != NULL && caller->mm->mmap->vm_freerg_list->rg_end != 0)
+  {
+    struct vm_rg_struct *victim_rg = malloc(sizeof(struct vm_rg_struct));
+    get_free_vmrg_area(caller, 0, PAGE_SIZE, victim_rg);
+    int vicpgn = PAGING_PGN(victim_rg->rg_start);
+    uint32_t vicpte = caller->mm->pgd[vicpgn];
+    int vicfpn = PAGING_FPN(caller->mm->pgd[vicpte]);
+
+    // TODO: remove the node in used_fp_list match fpn = vicfpn then return that node in re_fp
+    while (fp_q != NULL)
+    {
+      if (fp_q->fpn == vicfpn)
+      {
+        // Remove the node from the list
+        if (prev != NULL)
+        {
+          prev->fp_next = fp_q->fp_next;
+        }
+        else
+        {
+          caller->mram->used_fp_list = fp_q->fp_next;
+        }
+
+        // Set re_fp to the removed node
+        *re_fp = fp_q;
+
+        // Free the victim_rg memory
+        free(victim_rg);
+
+        return 0;
+      }
+
+      prev = fp_q;
+      fp_q = fp_q->fp_next;
+    }
+  }
 
   if (fp_q == NULL)
   {

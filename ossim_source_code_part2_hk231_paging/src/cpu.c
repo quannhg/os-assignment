@@ -75,9 +75,11 @@ int run(struct pcb_t *proc)
 		break;
 	case ALLOC:
 #ifdef MM_PAGING
+		printf("*=======================\n");
 		stat = pgalloc(proc, ins.arg_0, ins.arg_1);
-		printf("process %d alloc region %d size %d\n", proc->pid, ins.arg_1, ins.arg_0);
+		printf("process %d alloc region %d size %d\n\n", proc->pid, ins.arg_1, ins.arg_0);
 		print_pgtbl(proc, 0, -1);
+		printf("=======================*\n");
 #ifdef MEMPHYS_DUMP
 		MEMPHY_dump(proc->mram);
 #endif
@@ -88,22 +90,28 @@ int run(struct pcb_t *proc)
 		break;
 	case FREE:
 #ifdef MM_PAGING
+		printf("*=======================\n");
 		stat = pgfree_data(proc, ins.arg_0);
-		printf("process %d free region %d\n", proc->pid, ins.arg_0);
+		printf("process %d free region %d\n\n", proc->pid, ins.arg_0);
+		printf("=======================*\n");
 #else
 		stat = free_data(proc, ins.arg_0);
 #endif
 		break;
 	case READ:
 #ifdef MM_PAGING
+		printf("*=======================\n");
 		stat = pgread(proc, ins.arg_0, ins.arg_1, ins.arg_2);
+		printf("=======================*\n");
 #else
 		stat = read(proc, ins.arg_0, ins.arg_1, ins.arg_2);
 #endif
 		break;
 	case WRITE:
 #ifdef MM_PAGING
+		printf("*=======================\n");
 		stat = pgwrite(proc, ins.arg_0, ins.arg_1, ins.arg_2);
+		printf("=======================*\n");
 #else
 		stat = write(proc, ins.arg_0, ins.arg_1, ins.arg_2);
 #endif
