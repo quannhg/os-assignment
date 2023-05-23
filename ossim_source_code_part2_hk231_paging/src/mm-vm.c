@@ -570,17 +570,16 @@ int find_victim_page(struct pcb_t *caller, struct framephy_struct **re_fp)
 {
   struct framephy_struct *fp_q = caller->mram->used_fp_list;
   struct framephy_struct *prev = NULL;
+  struct vm_rg_struct *victim_rg = malloc(sizeof(struct vm_rg_struct));
 
   /* TODO: Implement the theorical mechanism to find the victim page */
 
   // check if free region list have frame
-  if (caller->mm->mmap->vm_freerg_list != NULL && caller->mm->mmap->vm_freerg_list->rg_end != 0)
+  if (!get_free_vmrg_area_online(caller, 0, victim_rg))
   {
-    struct vm_rg_struct *victim_rg = malloc(sizeof(struct vm_rg_struct));
-    get_free_vmrg_area(caller, 0, PAGE_SIZE, victim_rg);
     int vicpgn = PAGING_PGN(victim_rg->rg_start);
     uint32_t vicpte = caller->mm->pgd[vicpgn];
-    int vicfpn = PAGING_FPN(caller->mm->pgd[vicpte]);
+    int vicfpn = PAGING_FPN(vicpte);
 
     // TODO: remove the node in used_fp_list match fpn = vicfpn then return that node in re_fp
     while (fp_q != NULL)
@@ -663,6 +662,101 @@ int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_s
   {
     if (rgit->rg_start + size <= rgit->rg_end)
     { /* Current region has enough space */
+      newrg->rg_start = rgit->rg_start;
+      int inc_size = PAGING_PAGE_ALIGNSZ(size);
+      newrg->rg_end = rgit->rg_start + inc_size;
+      newrg->rg_next = NULL;
+
+      /* Update left space in chosen region */
+      if (rgit->rg_start + inc_size < rgit->rg_end)
+      {
+        rgit->rg_start = rgit->rg_start + inc_size;
+      }
+      else
+      { /*Use up all space, remove current node */
+        /*Clone next rg node */
+        struct vm_rg_struct *nextrg = rgit->rg_next;
+
+        /*Cloning */
+        if (nextrg != NULL)
+        {
+          rgit->rg_start = nextrg->rg_start;
+          rgit->rg_end = nextrg->rg_end;
+
+          rgit->rg_next = nextrg->rg_next;
+
+          free(nextrg);
+        }
+        else
+        {                                /*End of free list */
+          rgit->rg_start = rgit->rg_end; // dummy, inc_size 0 region
+          rgit->rg_next = NULL;
+        }
+      }
+      break;
+    }
+    else
+    {
+      rgit = rgit->rg_next; // Traverse next rg
+    }
+  }
+
+  if (newrg->rg_start == -1) // new region not found
+    return -1;
+
+  return 0;
+}
+
+/*get_free_vmrg_area - get a free vm region in ram
+ *@caller: caller
+ *@vmaid: ID vm area to alloc memory region
+ */
+int get_free_vmrg_area_online(struct pcb_t *caller, int vmaid, struct vm_rg_struct *newrg)
+{
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
+
+  struct vm_rg_struct *rgit = cur_vma->vm_freerg_list;
+
+  int size = PAGING_PAGESZ;
+
+  if (rgit == NULL)
+    return -1;
+
+  /* Probe unintialized newrg */
+  newrg->rg_start = newrg->rg_end = -1;
+
+  /* Traverse on list of free vm region to find a fit space */
+  while (rgit != NULL)
+  {
+    if (rgit->rg_start + size <= rgit->rg_end)
+    { /* Current region has enough space */
+
+      if (!PAGING_PAGE_PRESENT(caller->mm->pgd[PAGING_PGN(rgit->rg_start)]))
+      {
+        int cur_pg_adr = rgit->rg_start + size;
+
+        while (cur_pg_adr < rgit->rg_end)
+        {
+          int free_pgn = PAGING_PGN(cur_pg_adr);
+          if (PAGING_PAGE_PRESENT(caller->mm->pgd[free_pgn]))
+          {
+            // current region have online page, so take frame from this region
+
+            // split the region
+            struct vm_rg_struct *split_rg = malloc(sizeof(struct vm_rg_struct));
+            split_rg->rg_start = cur_pg_adr;
+            split_rg->rg_end = rgit->rg_end;
+            rgit->rg_end = cur_pg_adr;
+            split_rg->rg_next = rgit->rg_next;
+            rgit->rg_next = split_rg->rg_next;
+          }
+        }
+
+        rgit = rgit->rg_next;
+        continue;
+      }
+
+      //update new region
       newrg->rg_start = rgit->rg_start;
       int inc_size = PAGING_PAGE_ALIGNSZ(size);
       newrg->rg_end = rgit->rg_start + inc_size;
