@@ -80,17 +80,17 @@ struct pcb_t *get_mlq_proc(void)
 
 void put_mlq_proc(struct pcb_t *proc)
 {
-	
+	pthread_mutex_lock(&queue_lock);
 	enqueue(&mlq_ready_queue[proc->prio], proc);
 	mlq_ready_queue[proc->prio].slot_cpu_can_use++;	//increase slot_cpu_can_use
-	
+	pthread_mutex_unlock(&queue_lock);
 }
 
 void add_mlq_proc(struct pcb_t *proc)
 {
-	
+	pthread_mutex_lock(&queue_lock);
 	enqueue(&mlq_ready_queue[proc->prio], proc);
-	
+	pthread_mutex_unlock(&queue_lock);
 }
 
 struct pcb_t *get_proc(int decrSlotCpu)
@@ -110,9 +110,9 @@ void add_proc(struct pcb_t *proc)
 
 void finish_proc(struct pcb_t **proc)
 {
-	
+	pthread_mutex_lock(&queue_lock);
 	mlq_ready_queue[(*proc)->prio].slot_cpu_can_use++;	//increase slot_cpu_can_use
-	
+	pthread_mutex_unlock(&queue_lock);
 	free(*proc);
 }
 #else
