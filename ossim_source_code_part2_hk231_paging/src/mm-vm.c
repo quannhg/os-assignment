@@ -733,10 +733,10 @@ int get_free_vmrg_area_online(struct pcb_t *caller, int vmaid, struct vm_rg_stru
 
       if (!PAGING_PAGE_PRESENT(caller->mm->pgd[PAGING_PGN(rgit->rg_start)]))
       {
-        int cur_pg_adr = rgit->rg_start + size;
 
         while (cur_pg_adr < rgit->rg_end)
         {
+          int cur_pg_adr = rgit->rg_start + size;
           int free_pgn = PAGING_PGN(cur_pg_adr);
           if (PAGING_PAGE_PRESENT(caller->mm->pgd[free_pgn]))
           {
